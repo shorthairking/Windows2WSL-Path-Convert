@@ -1,0 +1,16 @@
+# wpc 占位服务（systemd user 单元）
+#
+# 说明：wpc 的「服务状态」由每个交互式 shell 启动时自动加载 hook 实现，
+# 本单元仅为「工具服务化」的体现与后续扩展点；
+# ExecStart 报告版本作为就绪标志，不承载路径转换逻辑。
+[Unit]
+Description=wpc - WSL 路径自动转换工具（占位服务）
+After=default.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/wpc --version
+RemainAfterExit=yes
+
+[Install]
+WantedBy=default.target
