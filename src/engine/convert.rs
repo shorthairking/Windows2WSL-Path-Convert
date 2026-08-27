@@ -1,16 +1,36 @@
 //! 转换引擎：盘符/分隔符/挂载点映射
 //!
 //! 转换规则（方案 §5.2）：
-//! - 盘符字母转小写；`\` → `/`；连续分隔符归一
-//! - `X:` → `<root>/x`，其中 `<root>` 默认 `/mnt/`（可配置）
-//! - 引号风格保持原文
-//!
-//! 本文件为占位骨架，由 `path-conversion-engine` skill 填充实现。
+//! - 盘符字母转小写；`\` → `/`；连续分隔符归一为一个 `/`
+//! - 盘符 `X:` → `<root>/x`，`<root>` 默认 `/mnt/`（可配置）
+//! - 引号风格由调用方保持（本函数输入/输出均不含引号）
 
 /// 将盘符绝对路径转换为 WSL 路径。
 ///
-/// 占位实现：返回空字符串，由后续 skill 填充。
-#[allow(dead_code)]
-pub fn convert_path(_windows_path: &str, _mount_root: &str) -> String {
-    String::new()
+/// `windows_path` 不含引号，形如 `C:\Users\x\a.txt` 或 `c:/foo/bar`；
+/// `mount_root` 形如 `/mnt/`。输出形如 `/mnt/c/Users/x/a.txt`。
+pub fn convert_path(windows_path: &str, mount_root: &str) -> String {
+    let b = windows_path.as_bytes();
+    let drive = (b[0] as char).to_ascii_lowercase();
+    let rest = &windows_path[2..];
+
+    let mut out = String::with_capacity(windows_path.len() + 8);
+    // 挂载根：去除尾部 `/` 后拼接
+    out.push_str(mount_root.trim_end_matches('/'));
+    out.push('/');
+    out.push(drive);
+
+    let mut prev_was_sep = false;
+    for ch in rest.chars() {
+        if ch == '\\' || ch == '/' {
+            if !prev_was_sep {
+                out.push('/');
+                prev_was_sep = true;
+            }
+        } else {
+            out.push(ch);
+            prev_was_sep = false;
+        }
+    }
+    out
 }
