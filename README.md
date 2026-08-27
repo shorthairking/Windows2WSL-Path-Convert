@@ -1,120 +1,150 @@
-# wpc —— WSL 路径自动转换工具
+# wpc — WSL Path Auto-Converter
 
-Windows Path Converter：在 WSL 中无感知地将 Windows 路径自动转换为 WSL 路径。
+> [English](README.md) | [简体中文](README.zh-CN.md)
+
+Windows Path Converter: transparently converts Windows paths to WSL paths as you type in WSL.
 
 ```bash
-# 用户输入
+# what you type
 some_command C:\Users\username\Documents\file.txt
-# 实际执行
+# what actually runs
 some_command /mnt/c/Users/username/Documents/file.txt
 ```
 
-整个过程中没有工具显式调用或提示（除非遇到错误），用户无需手动转换路径。
+No explicit invocation or prompt is shown during normal use (except on errors) — you never convert paths by hand.
 
-## 特性
+## Encoding Note (UTF-8)
 
-- **无感转换**：交互式 bash 中，含 Windows 盘符路径的命令在**执行前**被静默替换为 WSL 路径。
-- **零开销快速路径**：普通命令（无路径特征）不 fork 任何外部进程，完全无感。
-- **显式 CLI**：脚本/管道场景可用 `wpc` 命令显式转换。
-- **用户级安装**：部署到 `~/.local`，无需 sudo，卸载可逆。
-- **零依赖单二进制**：Rust 实现，`target/release/wpc` 约 325 KB。
+All project files are **UTF-8 encoded**. If Chinese text appears garbled (e.g., in Chinese error messages or the Chinese docs), make sure your terminal locale is UTF-8:
 
-## 环境要求
+```bash
+echo "$LANG"                       # should contain UTF-8, e.g. C.UTF-8 / en_US.UTF-8
+export LANG=C.UTF-8                # add to ~/.bashrc if needed
+```
 
-wpc 是 WSL 专用工具，安装/运行前请确认以下依赖（`install.sh` 会在部署前自动检查并提示）：
+## Features
 
-| 依赖 | 版本 | 用途 | 安装方式 |
-|------|------|------|----------|
-| WSL（Ubuntu） | 发行版名不限 | 运行平台 | 已随 Windows 启用 |
-| bash | ≥ 5.x | hook 运行环境 | Ubuntu 自带 |
-| Rust 工具链（`cargo`/`rustc`） | ≥ 1.96（仅从源码构建时需要） | 构建 release 二进制 | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` 或 `sudo apt install cargo` |
-| `wslpath` | WSL 自带 | 路径转换参考/回退 | 通常无需安装 |
-| 标准工具 `install`/`grep`/`sed`/`mkdir`/`rm` | Ubuntu 自带 | 安装脚本 | 无需额外安装 |
+- **Transparent conversion**: in interactive bash, commands containing Windows drive paths are silently rewritten to WSL paths **before** execution.
+- **Zero-overhead fast path**: ordinary commands (without path-like patterns) never fork an external process.
+- **Explicit CLI**: scripts/pipelines can convert paths explicitly with the `wpc` command.
+- **User-level install**: deployed under `~/.local`, no sudo required, reversible uninstall.
+- **Zero-dependency single binary**: Rust implementation, `target/release/wpc` ≈ 325 KB.
 
-> 说明：若直接使用已构建好的 `target/release/wpc` 发布二进制，则无需 Rust 工具链。
+## Requirements
 
-## 安装
+wpc is a WSL-only tool. `install.sh` auto-checks these before deploying:
+
+| Dependency | Version | Purpose | Install command |
+|------------|---------|---------|-----------------|
+| WSL (Ubuntu) | any distro name | runtime platform | already enabled with Windows |
+| bash | ≥ 5.x | hook runtime | bundled with Ubuntu |
+| Rust toolchain (`cargo`/`rustc`) | ≥ 1.96 (only needed to build from source) | build the release binary | see below |
+| `wslpath` | bundled with WSL | reference/fallback for conversion | usually already present |
+| standard tools `install`/`grep`/`sed`/`mkdir`/`rm` | bundled with Ubuntu | install script | no extra install |
+
+### One-shot dependency install (bash)
+
+```bash
+# 1) Rust toolchain (only required when building from source)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+#   ...or on Ubuntu/Debian:
+sudo apt update && sudo apt install -y cargo
+
+# 2) Verify required tools are present (WSL usually has them)
+command -v wslpath install grep sed mkdir rm cat
+
+# 3) Build and install
+cargo build --release
+./install.sh
+source ~/.bashrc
+```
+
+> If you already have a prebuilt `target/release/wpc`, the Rust toolchain is **not** required.
+
+## Install
 
 ```bash
 ./install.sh
-source ~/.bashrc   # 或重新打开终端
+source ~/.bashrc   # or open a new terminal
 ```
 
-安装内容：
+What gets installed:
 
-| 文件 | 说明 |
-|------|------|
-| `~/.local/bin/wpc` | 核心转换二进制 |
+| File | Description |
+|------|-------------|
+| `~/.local/bin/wpc` | core conversion binary |
 | `~/.local/share/wpc/wpc.bash` | bash DEBUG trap hook |
-| `~/.config/wpc/config.toml` | 配置文件骨架 |
-| `~/.bashrc` 标记块 | 交互 shell 启动时自动加载 hook |
-| `~/.config/systemd/user/wpc-daemon.service` | 可选占位服务（systemd 可用时） |
+| `~/.config/wpc/config.toml` | config file skeleton |
+| `~/.bashrc` marker block | auto-loads the hook on interactive shell startup |
+| `~/.config/systemd/user/wpc-daemon.service` | optional placeholder service (when systemd is available) |
 
-> 「服务状态」：bash 场景下每次交互式 shell 启动时 hook 自动激活；systemd user 占位服务作为服务化体现与扩展点。
+> "Service state": in bash, the hook activates automatically at every interactive shell startup; the systemd user placeholder service represents the serviced status and is an extension point.
 
-## 卸载
+## Uninstall
 
 ```bash
 ./uninstall.sh
 ```
 
-将删除二进制、hook、bashrc 标记块与 systemd 单元；用户配置 `~/.config/wpc/config.toml` 会保留（可手动删除）。
+Removes the binary, hook, bashrc marker block and systemd unit; your `~/.config/wpc/config.toml` is kept (delete manually if desired).
 
-## 使用说明
+## Usage
 
-### 无感转换（交互式 bash）
+### Transparent conversion (interactive bash)
 
 ```bash
-cat C:\Users\x\a.txt            # 执行 cat /mnt/c/Users/x/a.txt
-ls "C:\Program Files\Foo"       # 引号内空格路径正确转换
-diff C:\a.txt /home/u/b.txt     # 混合参数仅转换 Windows 部分
-cat C:/Users/x/a.txt            # 正斜杠风格同样支持
+cat C:\Users\x\a.txt            # runs cat /mnt/c/Users/x/a.txt
+ls "C:\Program Files\Foo"       # quoted paths with spaces convert correctly
+diff C:\a.txt /home/u/b.txt     # mixed arguments: only the Windows part converts
+cat C:/Users/x/a.txt            # forward-slash style is supported too
 ```
 
-环境变量开关：
+Environment switches:
 
-| 变量 | 作用 |
-|------|------|
-| `WPC_DISABLE=1` | 临时完全禁用转换（前缀形式或 export 均可） |
-| `WPC_FALLBACK=raw` | 遇到无法转换的 UNC 路径时原样执行而非阻止 |
+| Variable | Effect |
+|----------|--------|
+| `WPC_DISABLE=1` | temporarily disable conversion entirely (prefix or `export`) |
+| `WPC_FALLBACK=raw` | run the command as-is instead of blocking on unconvertible UNC paths |
 
-### 显式 CLI
+### Explicit CLI
 
 ```bash
-wpc 'C:\Users\x\a.txt'          # 逐参数转换，输出 /mnt/c/Users/x/a.txt
-wpc 'C:\a.txt' /home/u/b.txt    # 非路径参数原样输出
-printf 'C:\\a.txt\n' | wpc --stdin   # 逐行整体替换
+wpc 'C:\Users\x\a.txt'          # per-argument conversion → /mnt/c/Users/x/a.txt
+wpc 'C:\a.txt' /home/u/b.txt    # non-path arguments pass through unchanged
+printf 'C:\\a.txt\n' | wpc --stdin   # line-by-line whole-line rewriting
 wpc --version
 ```
 
-退出码：`0` 成功（含无匹配）；`1` 存在无法转换的 UNC 路径；`2` 用法错误。
+Exit codes: `0` success (including no match); `1` an unconvertible UNC path exists; `2` usage error.
 
-## 配置
+## Configuration
 
-`~/.config/wpc/config.toml`：
+`~/.config/wpc/config.toml`:
 
 ```toml
-# 挂载根目录：Windows 盘符映射到 WSL 的根（默认 /mnt/）
+# mount root: where Windows drive letters map into WSL (default /mnt/)
 # mount_root = "/mnt/"
 ```
 
-挂载根解析优先级：
+Mount root resolution order:
 
-1. `/etc/wsl.conf` 的 `[automount] root`
-2. `~/.config/wpc/config.toml` 的 `mount_root`
-3. 默认 `/mnt/`
+1. `/etc/wsl.conf` → `[automount] root`
+2. `~/.config/wpc/config.toml` → `mount_root`
+3. default `/mnt/`
 
-## 已知限制
+## Known limitations
 
-- **仅交互式 bash**：脚本内部直接写 Windows 路径不会自动转换（可用 `wpc` CLI 显式转换）。
-- **UNC 路径不支持**：`\\server\share\...` 无法映射到 WSL 路径，将提示错误并阻止执行（`WPC_FALLBACK=raw` 可逃生）。
-- **相对盘符路径不转换**：如 `C:foo`（无分隔符）。
-- **zsh/fish 不支持**：留待后续阶段。
+- **Interactive bash only**: Windows paths written directly inside scripts are not auto-converted (use the `wpc` CLI explicitly there).
+- **UNC paths unsupported**: `\\server\share\...` cannot be mapped into WSL; wpc prints an error and blocks execution (`WPC_FALLBACK=raw` escapes).
+- **Relative drive paths not converted**: e.g. `C:foo` (no separator).
+- **zsh/fish unsupported**: left for a later phase.
 
-## 文档
+## Documentation
 
-- 开发方案：[`docs/development-plan.md`](docs/development-plan.md)
-- 架构说明：[`docs/architecture.md`](docs/architecture.md)
-- 冒烟与验收记录：[`docs/smoke-checklist.md`](docs/smoke-checklist.md)
-- 项目约定：[`AGENTS.md`](AGENTS.md)
-
+| Document | English (primary) | 简体中文 |
+|----------|-------------------|----------|
+| Development plan | [`docs/development-plan.md`](docs/development-plan.md) | [`docs/development-plan.zh-CN.md`](docs/development-plan.zh-CN.md) |
+| Architecture | [`docs/architecture.md`](docs/architecture.md) | [`docs/architecture.zh-CN.md`](docs/architecture.zh-CN.md) |
+| Smoke & acceptance record | [`docs/smoke-checklist.md`](docs/smoke-checklist.md) | [`docs/smoke-checklist.zh-CN.md`](docs/smoke-checklist.zh-CN.md) |
+| Test plan | [`docs/test-plan.md`](docs/test-plan.md) | [`docs/test-plan.zh-CN.md`](docs/test-plan.zh-CN.md) |
+| Project conventions (AGENTS) | [`AGENTS.md`](AGENTS.md) | [`AGENTS.zh-CN.md`](AGENTS.zh-CN.md) |

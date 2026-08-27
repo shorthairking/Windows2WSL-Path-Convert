@@ -1,106 +1,111 @@
-# wpc 架构说明
+# wpc Architecture
 
-> 阶段一实现。WSL（bash 5.2）中的 Windows 路径自动转换工具。
+> [English](architecture.md) | [简体中文](architecture.zh-CN.md)
+>
+> Phase-1 implementation. A Windows path auto-converter inside WSL (bash 5.2).
 
-## 组件图
+## Component Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        用户交互层（bash）                         │
-│                                                                 │
-│  用户输入命令行 ──► DEBUG trap（wpc.bash）                        │
-│                     │                                            │
-│                     ├─ 快速路径（bash 内建模式，零 fork）          │
-│                     │   无候选特征 ──► 直接执行（零开销）          │
-│                     │   有候选特征 ──► 调用 wpc --eval-line       │
-│                     │                                            │
-│                     ├─ 退出码 0 ──► eval 执行转换后命令            │
-│                     ├─ 退出码 1 ──► stderr 中文提示，阻止执行      │
-│                     └─ 退出码 2 ──► 放行（不应发生，防御性）       │
+│                       User Layer (bash)                          │
+│                                                                  │
+│  user command line ──► DEBUG trap (wpc.bash)                     │
+│                        │                                         │
+│                        ├─ fast path (bash builtin match, no fork)│
+│                        │   no candidate ──► run as-is (zero cost)│
+│                        │   candidate ──► invoke wpc --eval-line  │
+│                        │                                         │
+│                        ├─ exit 0 ──► eval converted command      │
+│                        ├─ exit 1 ──► stderr message, block       │
+│                        └─ exit 2 ──► pass through (defensive)    │
 └────────────────────────────┬────────────────────────────────────┘
-                             │ fork（仅候选路径命令）
+                             │ fork (only for candidate commands)
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                   核心引擎（Rust 单二进制 wpc）                    │
-│                                                                 │
-│  CLI 入口 main.rs ──► hook.rs（--eval-line 整体替换）             │
-│                    │                                             │
-│                    ├─► engine/detect.rs  检测（盘符/UNC/上下文）   │
-│                    ├─► engine/convert.rs 转换（盘符→挂载点映射）   │
-│                    └─► config.rs         挂载根（wsl.conf/配置）  │
+│                    Core Engine (Rust binary wpc)                 │
+│                                                                  │
+│  CLI entry main.rs ──► hook.rs (--eval-line whole-line rewrite)  │
+│                        │                                         │
+│                        ├─► engine/detect.rs  detection           │
+│                        ├─► engine/convert.rs conversion          │
+│                        └─► config.rs         mount root          │
 └─────────────────────────────────────────────────────────────────┘
         ▲                                    ▲
-        │ install.sh 部署                     │ 配置读取
+        │ install.sh deploys                 │ config reads
         │                                    │
 ┌───────┴────────────┐          ┌────────────┴──────────────────┐
-│  部署层             │          │  配置层                       │
+│  Deployment layer  │          │  Config layer                 │
 │  ~/.local/bin/wpc  │          │  /etc/wsl.conf [automount]    │
 │  ~/.local/share/   │          │  ~/.config/wpc/config.toml    │
 │    wpc/wpc.bash    │          └───────────────────────────────┘
-│  ~/.bashrc 标记块   │
-│  systemd user 单元 │
+│  ~/.bashrc marker  │
+│  systemd user unit │
 └────────────────────┘
 ```
 
-## 数据流（无感转换）
+## Data Flow (transparent conversion)
 
 ```
-用户输入：  some_command C:\Users\x\a.txt
+user input:  some_command C:\Users\x\a.txt
      │
      ▼
-DEBUG trap 捕获 $BASH_COMMAND（交互 shell 原始文本）
+DEBUG trap captures $BASH_COMMAND (raw text in interactive shell)
      │
      ▼
-快速路径：匹配 [A-Za-z]:[\\/] 或 \\ 特征？
-     ├─ 否 ──► 直接执行原命令（零 fork，零输出）
-     └─ 是 ──► wpc --eval-line "some_command C:\Users\x\a.txt"
+fast path: matches [A-Za-z]:[\\/] or \\ ?
+     ├─ no ──► run original command (zero fork, zero output)
+     └─ yes ──► wpc --eval-line "some_command C:\Users\x\a.txt"
                  │
                  ▼
-      检测：C:\Users\x\a.txt → DriveAbsolute（盘符绝对路径）
-      转换：C: → /mnt/c，\ → /，连续分隔符归一
+      detect: C:\Users\x\a.txt → DriveAbsolute
+      convert: C: → /mnt/c, \ → /, collapse repeated separators
                  │
                  ▼
-      输出：some_command /mnt/c/Users/x/a.txt（退出码 0）
+      output: some_command /mnt/c/Users/x/a.txt (exit 0)
                  │
                  ▼
-      hook：history -s 保留用户原文 → eval 执行转换后命令 → 跳过原命令
+      hook: history -s keeps the original → eval converted → skip original
                  │
                  ▼
-实际执行：some_command /mnt/c/Users/x/a.txt（用户无感知）
+actually runs: some_command /mnt/c/Users/x/a.txt (user unaware)
 ```
 
-## 执行替换策略（hook 内部）
+## Execution Replacement Strategy (inside the hook)
 
-1. **捕获**：DEBUG trap 中读 `$BASH_COMMAND`。
-2. **快速路径**：bash 内建模式预筛，无候选特征直接放行（不 fork）。
-3. **替换**：`wpc --eval-line` 整体替换；退出码 0 → `history -s` 保留原文 + `eval` 执行转换后命令；退出码 1 → 中文提示并阻止执行（`WPC_FALLBACK=raw` 逃生）。
-4. **执行安全**：替换仅作用于被识别为路径的子串，其余文本逐字保留，不引入新转义。
-5. **防递归**：`__wpc_in_hook` 局部标志 + `WPC_DISABLE=1` 命令前缀，双保险。
-6. **状态无泄漏**：handler 内全部使用局部变量，不污染外层 shell。
+1. **Capture**: read `$BASH_COMMAND` in the DEBUG trap.
+2. **Fast path**: bash builtin pattern pre-filter; no candidate → pass through (no fork).
+3. **Replace**: `wpc --eval-line` rewrites the whole line; exit 0 → `history -s` keeps the
+   original + `eval` runs the converted command; exit 1 → Chinese message and block
+   (`WPC_FALLBACK=raw` escapes).
+4. **Execution safety**: only substrings recognized as paths are replaced; the rest of the
+   text is kept verbatim, no new escaping is introduced.
+5. **Re-entry protection**: `__wpc_in_hook` local flag + `WPC_DISABLE=1` command prefix.
+6. **No state leak**: the handler uses only local variables; it never pollutes the outer shell.
 
-## 错误处理策略表
+## Error Handling Strategy
 
-| 退出码 | 场景 | hook 行为 | CLI 行为 |
-|--------|------|-----------|----------|
-| 0 | 转换成功（含无匹配） | eval 执行转换后命令 | 正常输出 |
-| 1 | 存在无法转换的 UNC 路径 | stderr 中文提示，阻止执行（`WPC_FALLBACK=raw` 可逃生） | 输出原文本，返回 1 |
-| 2 | 参数/用法错误 | 不适用（hook 不产生） | stderr 用法提示，返回 2 |
+| Exit code | Scenario | Hook behavior | CLI behavior |
+|-----------|----------|---------------|--------------|
+| 0 | conversion success (incl. no match) | eval the converted command | normal output |
+| 1 | unconvertible UNC path present | stderr message, block (`WPC_FALLBACK=raw` escapes) | prints original text, returns 1 |
+| 2 | argument/usage error | not applicable (hook never produces it) | stderr usage, returns 2 |
 
-## 配置解析
+## Config Resolution
 
-| 来源 | 键 | 说明 |
-|------|-----|------|
-| `/etc/wsl.conf` | `[automount] root` | 系统级挂载根（优先） |
-| `~/.config/wpc/config.toml` | `mount_root` | 用户级覆盖（次优先） |
-| 内置默认 | — | `/mnt/` |
+| Source | Key | Notes |
+|--------|-----|-------|
+| `/etc/wsl.conf` | `[automount] root` | system-level mount root (highest) |
+| `~/.config/wpc/config.toml` | `mount_root` | user-level override (middle) |
+| built-in default | — | `/mnt/` |
 
-## 安全设计
+## Security Design
 
-| 风险 | 对策 |
-|------|------|
-| hook 递归/死循环 | `__wpc_in_hook` + `WPC_DISABLE` 双保险 |
-| 误转换 | 上下文约束（行首/空白后/引号后）+ 快速路径仅明确候选时进入引擎 |
-| `wpc` 不可用 | hook 检测调用失败（127）时原样放行，不阻断用户 |
-| 安装污染 | 全部用户级路径；bashrc 仅追加标记块；卸载可逆 |
-| 中文/Unicode 路径 | Rust `String` 全程 UTF-8 处理 |
-| VS Code 终端兼容 | 保存并链式调用调用方原有 DEBUG trap |
+| Risk | Mitigation |
+|------|------------|
+| hook recursion / infinite loop | `__wpc_in_hook` + `WPC_DISABLE` double protection |
+| false conversion | context constraints (start-of-line / after whitespace / after quote) + engine entered only for clear candidates |
+| `wpc` unavailable | hook passes the original command through when the call fails (127), never blocks the user |
+| install pollution | all user-level paths; bashrc only appends a marker block; uninstall is reversible |
+| Chinese / Unicode paths | Rust `String` handles UTF-8 end-to-end, no byte-level truncation |
+| VS Code terminal compatibility | saves and chains the caller's original DEBUG trap |
