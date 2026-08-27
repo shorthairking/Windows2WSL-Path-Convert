@@ -1,0 +1,13 @@
+[package]
+name = "wpc"
+version = "0.1.0"
+edition = "2021"
+description = "WSL 路径自动转换工具（Windows Path Converter）"
+
+[dependencies]
+
+[profile.release]
+# 单二进制、零开销要求：充分优化 + 链接时优化 + 去除符号
+opt-level = 3
+lto = true
+strip = true
