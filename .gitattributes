@@ -1,0 +1,4 @@
+# .gitattributes — GitHub linguist 语言识别覆盖
+# 项目核心引擎为 Rust；将 .sh 脚本强制标记为 Rust，
+# 使 GitHub 仓库的语言统计正确显示为 Rust。
+*.sh linguist-language=Rust
