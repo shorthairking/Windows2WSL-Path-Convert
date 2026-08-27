@@ -155,3 +155,74 @@ fn is_blank(c: u8) -> bool {
 fn is_alpha(c: u8) -> bool {
     c.is_ascii_alphabetic()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn slice<'a>(line: &'a str, m: &Match) -> &'a str {
+        &line[m.start..m.end]
+    }
+
+    #[test]
+    fn detect_drive_absolute() {
+        assert_eq!(detect_path_kind(r"C:\Users\x"), PathKind::DriveAbsolute);
+        assert_eq!(detect_path_kind(r"c:/foo/bar"), PathKind::DriveAbsolute);
+        assert_eq!(detect_path_kind("C:/Users/x/a.txt"), PathKind::DriveAbsolute);
+    }
+
+    #[test]
+    fn detect_unc() {
+        assert_eq!(detect_path_kind(r"\\server\share\x"), PathKind::Unc);
+    }
+
+    #[test]
+    fn detect_non_path() {
+        assert_eq!(detect_path_kind("foo"), PathKind::None);
+        assert_eq!(detect_path_kind("C:"), PathKind::None);
+        assert_eq!(detect_path_kind("C:foo"), PathKind::None);
+        assert_eq!(detect_path_kind("/home/u/b.txt"), PathKind::None);
+        assert_eq!(detect_path_kind("http://x"), PathKind::None);
+    }
+
+    #[test]
+    fn scan_line_basic() {
+        let line = r"cat C:\Users\x\a.txt";
+        let ms = scan_line(line);
+        assert_eq!(ms.len(), 1);
+        assert_eq!(ms[0].kind, PathKind::DriveAbsolute);
+        assert_eq!(slice(line, &ms[0]), r"C:\Users\x\a.txt");
+    }
+
+    #[test]
+    fn scan_line_quoted_spaces() {
+        let line = r#"ls "C:\Program Files\Foo""#;
+        let ms = scan_line(line);
+        assert_eq!(ms.len(), 1);
+        assert_eq!(slice(line, &ms[0]), r"C:\Program Files\Foo");
+    }
+
+    #[test]
+    fn scan_line_mixed() {
+        let line = r"diff C:\a.txt /home/u/b.txt";
+        let ms = scan_line(line);
+        assert_eq!(ms.len(), 1);
+        assert_eq!(slice(line, &ms[0]), r"C:\a.txt");
+    }
+
+    #[test]
+    fn scan_line_unc() {
+        let line = r"ls \\server\share\x";
+        let ms = scan_line(line);
+        assert_eq!(ms.len(), 1);
+        assert_eq!(ms[0].kind, PathKind::Unc);
+    }
+
+    #[test]
+    fn scan_line_no_false_positive() {
+        assert!(scan_line("echo C:").is_empty());
+        assert!(scan_line("curl http://example.com/x").is_empty());
+        assert!(scan_line("echo ${VAR}").is_empty());
+        assert!(scan_line(r#"grep -E 'C:\\foo'"#).is_empty());
+    }
+}

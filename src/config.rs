@@ -80,3 +80,16 @@ fn normalize_root(root: &str) -> String {
     }
     format!("{}/", r)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_root_variants() {
+        assert_eq!(normalize_root("/mnt/"), "/mnt/");
+        assert_eq!(normalize_root("/mnt"), "/mnt/");
+        assert_eq!(normalize_root(" /opt/ "), "/opt/");
+        assert_eq!(normalize_root(""), "/mnt/");
+    }
+}

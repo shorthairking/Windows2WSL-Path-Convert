@@ -34,3 +34,33 @@ pub fn convert_path(windows_path: &str, mount_root: &str) -> String {
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn convert_basic() {
+        assert_eq!(convert_path(r"C:\Users\x\a.txt", "/mnt/"), "/mnt/c/Users/x/a.txt");
+    }
+
+    #[test]
+    fn convert_lowercase_forward() {
+        assert_eq!(convert_path("c:/foo/bar", "/mnt/"), "/mnt/c/foo/bar");
+    }
+
+    #[test]
+    fn convert_spaces_kept() {
+        assert_eq!(convert_path(r"C:\Program Files\Foo", "/mnt/"), "/mnt/c/Program Files/Foo");
+    }
+
+    #[test]
+    fn convert_normalize_separators() {
+        assert_eq!(convert_path(r"C:\Users\\x\a.txt", "/mnt/"), "/mnt/c/Users/x/a.txt");
+    }
+
+    #[test]
+    fn convert_custom_root() {
+        assert_eq!(convert_path(r"C:\a.txt", "/opt/mnt/"), "/opt/mnt/c/a.txt");
+    }
+}

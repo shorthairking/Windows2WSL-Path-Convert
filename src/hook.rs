@@ -48,3 +48,40 @@ pub fn eval_line(raw_line: &str, mount_root: &str) -> EvalResult {
     text.push_str(&raw_line[last..]);
     EvalResult { text, has_unc }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn eval_line_converts() {
+        let res = eval_line(r"cat C:\Users\x\a.txt", "/mnt/");
+        assert!(!res.has_unc);
+        assert_eq!(res.text, "cat /mnt/c/Users/x/a.txt");
+    }
+
+    #[test]
+    fn eval_line_quoted_spaces() {
+        let res = eval_line(r#"ls "C:\Program Files\Foo""#, "/mnt/");
+        assert!(!res.has_unc);
+        assert_eq!(res.text, r#"ls "/mnt/c/Program Files/Foo""#);
+    }
+
+    #[test]
+    fn eval_line_mixed() {
+        let res = eval_line(r"diff C:\a.txt /home/u/b.txt", "/mnt/");
+        assert_eq!(res.text, "diff /mnt/c/a.txt /home/u/b.txt");
+    }
+
+    #[test]
+    fn eval_line_unc_flag() {
+        let res = eval_line(r"ls \\server\share\x", "/mnt/");
+        assert!(res.has_unc);
+    }
+
+    #[test]
+    fn eval_line_no_change() {
+        let res = eval_line("echo hello", "/mnt/");
+        assert_eq!(res.text, "echo hello");
+    }
+}

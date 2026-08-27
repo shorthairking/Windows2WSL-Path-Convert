@@ -13,8 +13,13 @@
    执行开发任务前，必须先读取对应 `SKILL.md` 并严格按其步骤执行。
 2. **逐步提交**：每完成一个 skill（或方案中约定的一个里程碑步骤）后，立即执行一次
    `git commit`，commit message 使用中文并注明完成的内容，格式如 `feat(engine): 完成核心路径转换引擎`。
-3. **禁止测试**：当前阶段（阶段一）不得编写或运行任何测试代码、测试框架、测试用例。
-   测试相关的一切内容留给后续阶段。验收仅允许做 `SKILL.md` 中列出的手动冒烟检查。
+3. **测试（阶段二，已获授权）**：阶段一已完结。编写/运行测试必须遵守
+   `docs/test-plan.md` 的隔离三原则：
+   - 子进程隔离：统一入口 `bash tests/run_all.sh`，脚本内任何 `export`/`cd`/`source` 只影响子进程；
+   - 临时内容限制在仓库内 `target/test-tmp/`，测试结束自动清理；
+   - 禁止影响全局变量或终端环境（含不修改真实 `~/.bashrc`/`~/.local/`，不在父终端 `source shell/wpc.bash`）。
+   单测入口：`cargo test`（`src/**/*.rs` 内 `#[cfg(test)]`）。
+   测试须对**实际路径**断言（真实 `/mnt/c` 路径 + `wslpath` 对照），素材缺失时明确 SKIP 而非伪造通过。
 4. **外部依赖登记**：开发中如需引入外部依赖（crate、系统包、工具），必须：
    - 先在本文件「外部依赖清单」中登记（名称、用途、版本、来源）；
    - 并在对应 commit message 中注明。
@@ -37,7 +42,15 @@ path_convert/
 ├── AGENTS.md                     # 本文件：项目约定
 ├── docs/
 │   ├── environment.md            # 开发环境实测信息
-│   └── development-plan.md       # 软件开发方案（除测试）
+│   ├── development-plan.md       # 软件开发方案（除测试）
+│   ├── architecture.md          # 架构说明
+│   ├── test-plan.md              # 测试计划与隔离三原则
+│   └── smoke-checklist.md        # 阶段一冒烟与验收记录
+├── tests/                        # 测试脚本（隔离运行）
+│   ├── run_all.sh                # 统一入口 + 环境快照校验
+│   ├── engine_cli_test.sh        # 引擎/CLI 真实路径测试
+│   ├── hook_integration_test.sh  # hook 端到端（script+pty）
+│   └── installer_test.sh         # 安装/卸载/幂等
 ├── .github/
 │   ├── agents/                   # 代理工作区
 │   │   └── path-convert-developer.agent.md
