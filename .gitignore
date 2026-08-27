@@ -1,2 +1,6 @@
 # Rust 构建产物
 /target
+
+# 开发工作区与需求文档（发布阶段不再追踪）
+/.github
+/require.md

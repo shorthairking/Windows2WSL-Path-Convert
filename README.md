@@ -19,6 +19,20 @@ some_command /mnt/c/Users/username/Documents/file.txt
 - **用户级安装**：部署到 `~/.local`，无需 sudo，卸载可逆。
 - **零依赖单二进制**：Rust 实现，`target/release/wpc` 约 325 KB。
 
+## 环境要求
+
+wpc 是 WSL 专用工具，安装/运行前请确认以下依赖（`install.sh` 会在部署前自动检查并提示）：
+
+| 依赖 | 版本 | 用途 | 安装方式 |
+|------|------|------|----------|
+| WSL（Ubuntu） | 发行版名不限 | 运行平台 | 已随 Windows 启用 |
+| bash | ≥ 5.x | hook 运行环境 | Ubuntu 自带 |
+| Rust 工具链（`cargo`/`rustc`） | ≥ 1.96（仅从源码构建时需要） | 构建 release 二进制 | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` 或 `sudo apt install cargo` |
+| `wslpath` | WSL 自带 | 路径转换参考/回退 | 通常无需安装 |
+| 标准工具 `install`/`grep`/`sed`/`mkdir`/`rm` | Ubuntu 自带 | 安装脚本 | 无需额外安装 |
+
+> 说明：若直接使用已构建好的 `target/release/wpc` 发布二进制，则无需 Rust 工具链。
+
 ## 安装
 
 ```bash

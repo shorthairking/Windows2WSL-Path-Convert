@@ -22,6 +22,40 @@ CONFIG_DIR="$HOME/.config/wpc"
 SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
 BASH_RC="$HOME/.bashrc"
 
+# ---- 0. 安装环境检查（发布处理：明确依赖，缺失即中止并给出指引） ----
+echo "wpc: 检查安装环境..."
+missing=()
+
+# 平台：wpc 面向 WSL 环境（非 WSL 仅警告，不阻断）
+if ! uname -r 2>/dev/null | grep -qi microsoft; then
+    echo "wpc: 警告：未检测到 WSL 内核，wpc 为 WSL 专用工具"
+fi
+
+# 标准工具（必需）
+for t in install grep sed mkdir rm cat; do
+    command -v "$t" >/dev/null 2>&1 || missing+=("$t")
+done
+
+# 构建工具（仅当 release 二进制缺失时需要）
+if [[ ! -x "$BIN_SRC" ]]; then
+    command -v cargo >/dev/null 2>&1 || missing+=("cargo（Rust 构建工具）")
+    command -v rustc >/dev/null 2>&1 || missing+=("rustc（Rust 编译器）")
+fi
+
+# 参考工具（WSL 内置；缺失仅提示，不阻断）
+command -v wslpath >/dev/null 2>&1 || \
+    echo "wpc: 警告：未找到 wslpath（WSL 自带路径转换参考，通常无需安装）"
+
+if [[ ${#missing[@]} -gt 0 ]]; then
+    echo "wpc: 错误：安装环境缺少以下依赖，请先安装：" >&2
+    for m in "${missing[@]}"; do
+        echo "  - $m" >&2
+    done
+    echo "wpc: 安装指引：Rust 工具链见 README.md「环境要求」章节。" >&2
+    exit 1
+fi
+echo "wpc: 环境检查通过"
+
 # ---- 1. 定位或构建 release 二进制 ----
 if [[ ! -x "$BIN_SRC" ]]; then
     echo "wpc: 未找到 release 二进制，开始构建（cargo build --release）..."
