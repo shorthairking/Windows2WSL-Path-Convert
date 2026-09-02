@@ -33,6 +33,10 @@ echo 普通: hello
 echo 引号空格: "C:\Program Files\Foo"
 WPC_DISABLE=1 echo 禁用: C:\a.txt
 ls \\server\share\x
+export COMP_LINE='cd /home'
+export COMP_POINT=8
+case x in \\*) echo 命中 ;; *) echo 补全上下文不拦截: ok ;; esac
+unset COMP_LINE COMP_POINT
 echo 之后正常: C:\ok.txt
 exit
 EOF
@@ -58,6 +62,7 @@ check "普通命令无影响" "普通: hello"
 check "引号内空格路径转换" "引号空格: /mnt/c/Program Files/Foo"
 check "WPC_DISABLE 禁用" "禁用: C:a.txt"
 check "UNC 中文提示" "wpc: 无法转换 Windows UNC 路径"
+check "补全上下文内部命令不拦截" "补全上下文不拦截: ok"
 check "UNC 后 hook 仍正常" "之后正常: /mnt/c/ok.txt"
 
 # 防泄漏：输出中不应出现 DEBUG trap 递归报错

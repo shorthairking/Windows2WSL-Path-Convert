@@ -74,6 +74,7 @@ actually runs: some_command /mnt/c/Users/x/a.txt (user unaware)
 ## Execution Replacement Strategy (inside the hook)
 
 1. **Capture**: read `$BASH_COMMAND` in the DEBUG trap.
+   - **Completion-context guard**: while TAB completion runs, bash sets `COMP_LINE`/`COMP_POINT`; the hook skips conversion for the completion function's internal commands (e.g. `[[ $cmd == \\* ]]`), which are not the user's real command line.
 2. **Fast path**: bash builtin pattern pre-filter; no candidate → pass through (no fork).
 3. **Replace**: `wpc --eval-line` rewrites the whole line; exit 0 → `history -s` keeps the
    original + `eval` runs the converted command; exit 1 → Chinese message and block
@@ -104,7 +105,7 @@ actually runs: some_command /mnt/c/Users/x/a.txt (user unaware)
 | Risk | Mitigation |
 |------|------------|
 | hook recursion / infinite loop | `__wpc_in_hook` + `WPC_DISABLE` double protection |
-| false conversion | context constraints (start-of-line / after whitespace / after quote) + engine entered only for clear candidates |
+| false conversion | context constraints (start-of-line / after whitespace / after quote) + completion-context guard (COMP_LINE/COMP_POINT) + UNC requires a valid host-name start char (no `\`, whitespace, quote, or glob `*?[`) |
 | `wpc` unavailable | hook passes the original command through when the call fails (127), never blocks the user |
 | install pollution | all user-level paths; bashrc only appends a marker block; uninstall is reversible |
 | Chinese / Unicode paths | Rust `String` handles UTF-8 end-to-end, no byte-level truncation |

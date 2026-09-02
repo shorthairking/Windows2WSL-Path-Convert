@@ -140,7 +140,7 @@ flowchart TB
 ### 5.1 Detection Rules
 
 1. **Drive absolute path**: matches `[A-Za-z]:[\\/]` at the start, with at least one non-whitespace character after it.
-2. **UNC path**: matches `\\` at the start followed by a non-`\` character; once recognized, mark it as error category `UnsupportedUnc` (no conversion result).
+2. **UNC path**: matches `\\` at the start followed by a valid host-name start character (not `\`, whitespace, quote, or glob `*?[`); once recognized, mark it as error category `UnsupportedUnc` (no conversion result). Escaped/glob forms such as `\\*` or `[[ $cmd == \\* ]]` (seen inside completion functions) are not treated as UNC.
 3. **Context constraints**: the candidate must be at one of the following positions, otherwise it is treated as a non-path and not converted:
    - start of line;
    - after a whitespace character;
@@ -177,6 +177,7 @@ Exit codes: `0` success (incl. no match); `1` an unconvertible UNC exists; `2` u
 bash has no native preexec; the "replace and execute" must happen without breaking the user experience:
 
 1. **Capture**: read `$BASH_COMMAND` in the DEBUG trap (raw command-line text in interactive mode).
+   - **Completion-context guard**: while readline TAB-completion runs, bash sets `COMP_LINE`/`COMP_POINT` and the DEBUG trap also fires for the completion function's internal commands (e.g. `[[ $cmd == \\* ]]`); those are not the user's real command line, so when `COMP_LINE`/`COMP_POINT` are set the hook skips conversion entirely (no fork, no block).
 2. **Fast path**: bash builtin pattern `[[ $cmd == *[A-Za-z]:[\\/]* || $cmd == *\\\\* ]]` pre-filters; if it does not match, pass through directly (zero fork).
 3. **Replace**: when the pre-filter matches, call `wpc --eval-line "$cmd"`:
    - Exit 0: get `converted`, execute by trying in order, taking the first feasible:

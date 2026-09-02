@@ -91,6 +91,20 @@ else
     fail=1
 fi
 
+echo "== 用例 6：转义形态 \\\\* 不应判为 UNC（退出码 0） =="
+set +e
+out="$( "$BIN" --eval-line '[[ $cmd == \\* ]]' 2>&1 )"
+rc=$?
+set -e
+if [[ $rc -eq 0 ]]; then
+    echo "  ✅ 转义反斜杠不判为 UNC，退出码 0"
+    echo "  输出：$out"
+else
+    echo "  ❌ 期望退出码 0，实际 $rc"
+    echo "  输出：$out"
+    fail=1
+fi
+
 echo ""
 if [[ $fail -eq 1 ]]; then
     echo "engine_cli: FAIL"

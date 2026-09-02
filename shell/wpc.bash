@@ -7,6 +7,7 @@
 #   3. 有候选特征时调用 `wpc --eval-line "$cmd"` 整体替换
 #   4. 启用 `shopt -s extdebug`：hook 返回非零 → 跳过原始命令，改为执行转换后文本
 #   5. 防递归：__wpc_in_hook + WPC_DISABLE 双保险
+#   6. 补全（TAB）上下文：补全函数内部命令不是用户命令行，跳过转换（COMP_LINE 检测）
 #
 # 安装：由 install.sh 注入 ~/.bashrc 的标记块；也可手动 `source` 本文件启用。
 # 本文件内容位于 # WPC-HOOK-BEGIN / # WPC-HOOK-END 之间，供安装器定位。
@@ -43,6 +44,13 @@ __wpc_unc_pattern='*\\\\*'
 wpc_preexec() {
     # 防递归：hook 内部命令（wpc 调用、history、eval）不再进入转换流程
     [[ -n "${__wpc_in_hook:-}" ]] && return 0
+
+    # 补全（readline）上下文：TAB 补全函数的内部命令（如 `[[ $cmd == \\* ]]`）
+    # 不是用户的真实命令行，不做转换、不拦截。
+    # bash 在补全期间自动设置 COMP_LINE/COMP_POINT，普通命令执行时未设置。
+    if [[ -v COMP_LINE && -v COMP_POINT ]]; then
+        return 0
+    fi
 
     local cmd="$BASH_COMMAND"
     local converted rc

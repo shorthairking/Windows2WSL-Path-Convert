@@ -74,6 +74,7 @@ DEBUG trap 捕获 $BASH_COMMAND（交互 shell 原始文本）
 ## 执行替换策略（hook 内部）
 
 1. **捕获**：DEBUG trap 中读 `$BASH_COMMAND`。
+   - **补全上下文防护**：TAB 补全期间 bash 会设置 `COMP_LINE`/`COMP_POINT`；hook 对补全函数内部命令（如 `[[ $cmd == \\* ]]`）不做转换，这些不是用户真实命令行。
 2. **快速路径**：bash 内建模式预筛，无候选特征直接放行（不 fork）。
 3. **替换**：`wpc --eval-line` 整体替换；退出码 0 → `history -s` 保留原文 + `eval` 执行转换后命令；退出码 1 → 中文提示并阻止执行（`WPC_FALLBACK=raw` 逃生）。
 4. **执行安全**：替换仅作用于被识别为路径的子串，其余文本逐字保留，不引入新转义。
@@ -101,7 +102,7 @@ DEBUG trap 捕获 $BASH_COMMAND（交互 shell 原始文本）
 | 风险 | 对策 |
 |------|------|
 | hook 递归/死循环 | `__wpc_in_hook` + `WPC_DISABLE` 双保险 |
-| 误转换 | 上下文约束（行首/空白后/引号后）+ 快速路径仅明确候选时进入引擎 |
+| 误转换 | 上下文约束（行首/空白后/引号后）+ 补全上下文防护（COMP_LINE/COMP_POINT）+ UNC 须后跟合法服务器名起始字符（非 `\`/空白/引号/通配符 `*?[`） |
 | `wpc` 不可用 | hook 检测调用失败（127）时原样放行，不阻断用户 |
 | 安装污染 | 全部用户级路径；bashrc 仅追加标记块；卸载可逆 |
 | 中文/Unicode 路径 | Rust `String` 全程 UTF-8 处理 |

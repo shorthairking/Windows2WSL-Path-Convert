@@ -31,8 +31,7 @@
 | S4 forward slash | `wpc --eval-line 'cat C:/Users/x/a.txt'` | converts | same | ✅ |
 | A6 UNC | `wpc --eval-line 'ls \\server\share\x'` | unchanged + exit 1 | same | ✅ |
 | A7 false-positive guard | `echo C:` / URL / `${VAR}` | none converted | same | ✅ |
-| edge escaped backslash | `grep -E 'C:\\foo'` (single-quoted double backslash) | not converted | same | ✅ |
-| collapse separators | `wpc 'C:\Users\\x\a.txt'` | `/mnt/c/Users/x/a.txt` | same | ✅ |
+| edge escaped backslash | `grep -E 'C:\\foo'` (single-quoted double backslash) | not converted | same | ✅ || escaped backslash not UNC | `wpc --eval-line '[[ $cmd == \\* ]]'` | unchanged + exit 0 | same | ✅ || collapse separators | `wpc 'C:\Users\\x\a.txt'` | `/mnt/c/Users/x/a.txt` | same | ✅ |
 | stdin | piped multi-line | line-by-line whole rewrite | same | ✅ |
 | wslpath comparison | `wslpath -u 'C:\Users\x\a.txt'` | identical to wpc | identical | ✅ |
 | mount root config | user config `mount_root="/opt/mnt/"` | `/opt/mnt/c/a.txt` | same | ✅ |
@@ -48,6 +47,7 @@
 | UNC Chinese message + command not executed | ✅ |
 | quoted path with spaces converts correctly | ✅ |
 | hook internal commands (history writes) do not recurse | ✅ |
+| TAB-completion context: internal commands containing `\\` (e.g. `[[ $cmd == \\* ]]`) are not intercepted | ✅ |
 | `WPC_FALLBACK=raw` escape (prefix and env-var forms) | ✅ |
 | no state leak after conversion (consecutive commands fine) | ✅ |
 | idempotent reload (repeated `source`) | ✅ |

@@ -37,8 +37,9 @@ pub fn detect_path_kind(candidate: &str) -> PathKind {
     let b = candidate.as_bytes();
     let n = b.len();
 
-    // UNC：`\\` 开头且后跟非 `\` 字符
-    if n >= 2 && b[0] == b'\\' && b[1] == b'\\' && (n < 3 || b[2] != b'\\') {
+    // UNC：`\\` 开头且后跟合法的服务器名起始字符
+    // （排除 `\\`/空白/引号/通配符，避免 `\\*`、`\\ `、行尾 `\\` 等转义/glob 形态误判）
+    if n >= 3 && b[0] == b'\\' && b[1] == b'\\' && is_unc_host_start(b[2]) {
         return PathKind::Unc;
     }
 
@@ -114,8 +115,9 @@ pub fn scan_line(line: &str) -> Vec<Match> {
             continue;
         }
 
-        // UNC 路径
-        if c == b'\\' && i + 1 < n && b[i + 1] == b'\\' && (i + 2 >= n || b[i + 2] != b'\\') {
+        // UNC 路径：`\\` 后须跟合法的服务器名起始字符
+        // （行尾 `\\`、空白/引号/通配符开头的 `\\*` 等转义与 glob 形态不视为 UNC）
+        if c == b'\\' && i + 1 < n && b[i + 1] == b'\\' && i + 2 < n && is_unc_host_start(b[i + 2]) {
             let end = path_end(b, n, i + 2, in_single, in_double);
             matches.push(Match { kind: PathKind::Unc, start: i, end });
             i = end;
@@ -154,6 +156,13 @@ fn is_blank(c: u8) -> bool {
 /// 是否为 ASCII 字母
 fn is_alpha(c: u8) -> bool {
     c.is_ascii_alphabetic()
+}
+
+/// 是否为合法的 UNC 服务器名起始字符：
+/// 排除 `\\`（`\\\\` 不构成路径）、空白、引号与通配符（`*?[`），
+/// 避免把 shell 转义/glob 形态（如 `\\*`、`[[ $cmd == \\* ]]`）误判为 UNC 路径。
+fn is_unc_host_start(c: u8) -> bool {
+    c != b'\\' && !is_blank(c) && c != b'\'' && c != b'"' && c != b'*' && c != b'?' && c != b'['
 }
 
 #[cfg(test)]
@@ -224,5 +233,30 @@ mod tests {
         assert!(scan_line("curl http://example.com/x").is_empty());
         assert!(scan_line("echo ${VAR}").is_empty());
         assert!(scan_line(r#"grep -E 'C:\\foo'"#).is_empty());
+    }
+
+    #[test]
+    fn detect_unc_requires_real_host() {
+        // 转义/glob 形态不视为 UNC
+        assert_eq!(detect_path_kind(r"\\*"), PathKind::None);
+        assert_eq!(detect_path_kind(r"\\"), PathKind::None);
+        assert_eq!(detect_path_kind(r"\\ "), PathKind::None);
+        assert_eq!(detect_path_kind(r"\\\x"), PathKind::None); // 三反斜杠
+        // 真实 UNC 仍识别
+        assert_eq!(detect_path_kind(r"\\server\\share\\x"), PathKind::Unc);
+        assert_eq!(detect_path_kind(r"\\wsl.localhost\\Ubuntu-22.04"), PathKind::Unc);
+    }
+
+    #[test]
+    fn scan_line_escaped_double_backslash_not_unc() {
+        // 补全/测试脚本中的转义反斜杠形态：不判为 UNC（tab 补全误判 bug 回归）
+        assert!(scan_line(r"[[ $cmd == \\* ]]").is_empty());
+        assert!(scan_line(r"\\*").is_empty());
+        assert!(scan_line(r"ls \\*").is_empty());
+        assert!(scan_line(r"ls \\\\server").is_empty()); // 四个反斜杠紧跟反斜杠
+        // 真实 UNC 行仍识别
+        let ms = scan_line(r"ls \\server\\share\\x");
+        assert_eq!(ms.len(), 1);
+        assert_eq!(ms[0].kind, PathKind::Unc);
     }
 }

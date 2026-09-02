@@ -31,8 +31,7 @@
 | S4 正斜杠 | `wpc --eval-line 'cat C:/Users/x/a.txt'` | 转换 | 同预期 | ✅ |
 | A6 UNC | `wpc --eval-line 'ls \\server\share\x'` | 原样 + 退出码 1 | 同预期 | ✅ |
 | A7 误伤防护 | `echo C:` / URL / `${VAR}` | 均不转换 | 同预期 | ✅ |
-| 边界 转义反斜杠 | `grep -E 'C:\\foo'`（单引号双反斜杠） | 不转换 | 同预期 | ✅ |
-| 连续分隔符归一 | `wpc 'C:\Users\\x\a.txt'` | `/mnt/c/Users/x/a.txt` | 同预期 | ✅ |
+| 边界 转义反斜杠 | `grep -E 'C:\\foo'`（单引号双反斜杠） | 不转换 | 同预期 | ✅ || 转义反斜杠非 UNC | `wpc --eval-line '[[ $cmd == \\* ]]'` | 原样 + 退出码 0 | 同预期 | ✅ || 连续分隔符归一 | `wpc 'C:\Users\\x\a.txt'` | `/mnt/c/Users/x/a.txt` | 同预期 | ✅ |
 | stdin | 多行管道 | 逐行整体替换 | 同预期 | ✅ |
 | wslpath 对照 | `wslpath -u 'C:\Users\x\a.txt'` | `/mnt/c/Users/x/a.txt` 与 wpc 一致 | 一致 | ✅ |
 | 挂载根配置 | 用户 config.toml `mount_root="/opt/mnt/"` | `/opt/mnt/c/a.txt` | 同预期 | ✅ |
@@ -48,6 +47,7 @@
 | UNC 中文提示 + 命令未执行 | ✅ |
 | 带引号空格路径正确转换 | ✅ |
 | hook 内部命令（history 写入）不触发递归 | ✅ |
+| TAB 补全上下文：含 `\\` 的补全内部命令（如 `[[ $cmd == \\* ]]`）不拦截 | ✅ |
 | `WPC_FALLBACK=raw` 逃生（前缀与环境变量两种方式） | ✅ |
 | 转换后 hook 状态无泄漏（连续多条命令均正常） | ✅ |
 | 幂等重载（重复 source） | ✅ |
